@@ -23,6 +23,12 @@ class Document:
             if key not in ['', ' '] and value > 3
         }.items()))
 
+    def get_document_unique_words(self):
+        return self.__word_counters.keys()
+
+    def get_document_id(self):
+        return self.__id
+
     @staticmethod
     def get_word_counters(dataset):
         return OrderedDict(Counter(dataset))
