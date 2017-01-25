@@ -10,8 +10,6 @@ from em_algorithm import EMAlgorithm
 
 def main(development_dataset_file_path, topics_file_path):
     documents, topics = Utils.load_dataset(development_dataset_file_path, topics_file_path)
-    print len(documents)
-    print len(topics)
 
     algorithm = EMAlgorithm(documents, topics)
     algorithm.run()

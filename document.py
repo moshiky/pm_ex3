@@ -14,7 +14,7 @@ class Document:
         self.__filter_content()
 
     def __init_document_metadata(self, headline):
-        headline_parts = headline.split('\t')
+        headline_parts = headline.replace('>', '').split('\t')
         self.__id = int(headline_parts[1])
         self.__topics = headline_parts[2:]
 
@@ -36,6 +36,9 @@ class Document:
 
     def get_document_id(self):
         return self.__id
+
+    def get_document_topics(self):
+        return self.__topics
 
     @staticmethod
     def get_word_counters(dataset):

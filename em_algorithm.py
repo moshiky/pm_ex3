@@ -6,32 +6,29 @@ from utils import Utils
 
 class EMAlgorithm:
     def __init__(self, documents, clusters):
+        # self.__documents: list of Document objects
+        # contains all of train documents
         self.__documents = documents
+
+        # self.__clusters: list of strings
+        # contains all of cluster names
         self.__clusters = clusters
+
         self.__clusters_probabilities = np.zeros(consts.NUM_OF_CLUSTERS)
         self.__word_for_given_cluster_probabilities = None
         self.__cluster_for_document_probabilities = None
         self.__all_seen_words = self.__get_all_seen_words()
-        Utils.log("here")
         self.__all_document_counters = \
             np.array([document.get_all_word_counters_vector(self.__all_seen_words) for document in self.__documents])
-        Utils.log("here2")
         self.__document_counter_sum = sum(self.__all_document_counters.transpose())
-        Utils.log("here3")
 
     def __calculate_likelihood_log(self):
         Utils.log("__calculate_likelihood_log")
 
         total_likelihood = 0
         for document_index in range(len(self.__documents)):
-
             z_list = self.__get_zi_list(document_index)
-            max_zi = max(z_list)
-
-            document_likelihood = 0
-            for i in range(consts.NUM_OF_CLUSTERS):
-                document_likelihood += np.exp(z_list[i] - max_zi)
-
+            document_likelihood = sum(np.exp(z_list - max(z_list)))
             total_likelihood += np.log(document_likelihood)
 
         return total_likelihood
@@ -51,12 +48,6 @@ class EMAlgorithm:
             self.__all_document_counters[document_index].dot(
                 np.log(self.__word_for_given_cluster_probabilities.transpose())
             )
-
-        # document_word_counters = document.get_word_counters()
-        #
-        # # <<<<<<<<
-        # for word in document_word_counters.keys():
-        #     total += document_word_counters[word] * np.log(self.__word_for_given_cluster_probabilities[i][word])
 
     def __execute_e_step(self):
         Utils.log("__execute_e_step")
@@ -106,33 +97,33 @@ class EMAlgorithm:
         Utils.log("calculate word for cluster probabilities matrix")
         self.__word_for_given_cluster_probabilities = (up_total_matrix.transpose() / down_total_vector).transpose()
 
-        # self.__word_for_given_cluster_probabilities = [dict()]*consts.NUM_OF_CLUSTERS
-        #
-        # for cluster_index in range(consts.NUM_OF_CLUSTERS):
-        #     Utils.log("calculate for cluster " + str(cluster_index))
-        #     self.__word_for_given_cluster_probabilities[cluster_index] = dict()
-        #
-        #     Utils.log("calculate down total")
-        #     cluster_for_document_probabilities = self.__cluster_for_document_probabilities[:, cluster_index]
-        #     down_total = consts.VOCABULARY_SET_LENGTH * consts.LAMBDA
-        #     down_total += \
-        #         cluster_for_document_probabilities.dot(
-        #             np.array([sum(document_counters) for document_counters in self.__all_document_counters])
-        #         )
-        #
-        #     Utils.log("calculate for each word: " + str(len(self.__all_seen_words)))
-        #     up_total = consts.LAMBDA
-        #     cluster_for_document_probabilities = self.__cluster_for_document_probabilities[:, cluster_index]
-        #
-        #     for word in self.__all_seen_words:
-        #         up_total = consts.LAMBDA
-        #         for document in self.__documents:
-        #             up_total += \
-        #                 self.__cluster_for_document_probabilities[document.get_document_id()][i] * \
-        #                 (document.get_existing_word_counters()[word] if word in document.get_document_unique_words()
-        #                  else 0)
-        #
-        #         self.__word_for_given_cluster_probabilities[i][word] = up_total/down_total
+    def __get_cluster_topic(self, documents_to_clusters):
+        topic_ranks = dict()
+        for document in documents_to_clusters:
+            document_topics = document.get_document_topics()
+            for topic in document_topics:
+                if topic not in topic_ranks.keys():
+                    topic_ranks[topic] = 0
+                topic_ranks[topic] += 1
+        return topic_ranks.keys()[np.argmax(topic_ranks.values())]
+
+    def __get_loss(self):
+        mistakes = 0.0
+
+        documents_to_clusters = [[] for i in range(consts.NUM_OF_CLUSTERS)]
+        for document_index, document in enumerate(self.__documents):
+            documents_to_clusters[self.__get_document_most_likely_cluster_id(document_index)].append(document)
+
+        for cluster_documents in documents_to_clusters:
+            cluster_topic = self.__get_cluster_topic(cluster_documents)
+            for document in cluster_documents:
+                if cluster_topic not in document.get_document_topics():
+                    mistakes += 1
+
+        return mistakes / len(self.__documents)
+
+    def __get_document_most_likely_cluster_id(self, document_index):
+        return np.argmax(self.__cluster_for_document_probabilities[document_index])
 
     def run(self):
         Utils.log("run")
@@ -149,7 +140,7 @@ class EMAlgorithm:
         last_likelihood = self.__calculate_likelihood_log()
         Utils.log('first likelihood = {last_likelihood}'.format(last_likelihood=last_likelihood))
         new_likelihood = last_likelihood - (consts.MINIMAL_INTERVAL + 1)
-        while last_likelihood - new_likelihood > consts.MINIMAL_INTERVAL:
+        while abs(last_likelihood - new_likelihood) > consts.MINIMAL_INTERVAL:
             # E step
             self.__execute_e_step()
 
@@ -158,6 +149,7 @@ class EMAlgorithm:
 
             last_likelihood = new_likelihood
             new_likelihood = self.__calculate_likelihood_log()
-            Utils.log('new_likelihood= {new_likelihood}, diff={diff}'.format(
-                new_likelihood=new_likelihood, diff=last_likelihood-new_likelihood)
+            Utils.log('new_likelihood= {new_likelihood}, diff={diff}, loss={loss}'.format(
+                    new_likelihood=new_likelihood, diff=last_likelihood-new_likelihood, loss=self.__get_loss()
+                )
             )
