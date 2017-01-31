@@ -31,8 +31,9 @@ class Document:
         return self.__word_counters
 
     def get_all_word_counters_vector(self, all_seen_words):
-        return np.array([self.__word_counters[word] if word in self.__word_counters.keys() else 0
-                         for word in all_seen_words])
+        all_words_dict = OrderedDict(zip(all_seen_words, [0]*len(all_seen_words)))
+        all_words_dict.update(self.__word_counters)
+        return np.array(all_words_dict.values())
 
     def get_document_unique_words(self):
         return self.__word_counters.keys()

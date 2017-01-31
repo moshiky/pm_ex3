@@ -108,7 +108,7 @@ class EMAlgorithm:
     def __add_epsilon_to_zeros(x):
         return x if x > 0 else consts.EPSILON
 
-    def __execute_m_step(self):
+    def __execute_m_step(self, lambda_parameter):
         Utils.log("__execute_m_step")
 
         # calculate alpha i - average probability of each cluster
@@ -126,12 +126,12 @@ class EMAlgorithm:
         Utils.log("calculate numerator matrix")
         numerator_matrix = \
             self.__cluster_for_document_probabilities.transpose().dot(self.__all_document_counters) + \
-            consts.LAMBDA
+            lambda_parameter
 
         Utils.log("calculate denominator vector")
         denominator_vector = \
             self.__document_counter_sum.dot(self.__cluster_for_document_probabilities) + \
-            len(self.__all_seen_words) * consts.LAMBDA \
+            len(self.__all_seen_words) * lambda_parameter \
 
         Utils.log("calculate word for cluster probabilities matrix")
         self.__word_for_given_cluster_probabilities = (numerator_matrix.transpose() / denominator_vector).transpose()
@@ -145,12 +145,6 @@ class EMAlgorithm:
                     topic_freqs[topic] = 0
                 topic_freqs[topic] += 1
 
-        Utils.log(
-            'cluster stats: docs= {docs}, topics= {topics}, \t values= {values}'.format(
-                docs=len(cluster_documents), topics=len(topic_freqs.values()),
-                values=dict(OrderedDict(sorted(topic_freqs.items())))
-            )
-        )
         dominant_topic_name = topic_freqs.keys()[np.argmax(topic_freqs.values())]
         return dominant_topic_name, topic_freqs[dominant_topic_name]
 
@@ -164,9 +158,6 @@ class EMAlgorithm:
             cluster_dominant_topic, dominant_topic_freq = self.__get_cluster_dominant_topic(cluster_documents)
             Utils.log('cluster topic: {topic}'.format(topic=cluster_dominant_topic))
             mistakes += len(cluster_documents) - dominant_topic_freq
-            # for document in cluster_documents:
-            #     if cluster_dominant_topic not in document.get_document_topics():
-            #         mistakes += 1
 
         return mistakes / len(self.__documents)
 
@@ -182,26 +173,35 @@ class EMAlgorithm:
             self.__cluster_for_document_probabilities[i::consts.NUM_OF_CLUSTERS, i] = 1
 
         # M step
-        self.__execute_m_step()
+        lambda_parameter = consts.START_LAMBDA
+        self.__execute_m_step(lambda_parameter)
 
         # iterate until progress is too small
-        last_likelihood = self.__calculate_likelihood_log()
-        Utils.log('first likelihood = {last_likelihood}'.format(last_likelihood=last_likelihood))
-        new_likelihood = last_likelihood + (consts.MINIMAL_INTERVAL + 1)
+        likelihood_history = list()
+        likelihood_history.append(self.__calculate_likelihood_log() - (consts.MINIMAL_INTERVAL + 1))
+        likelihood_history.append(likelihood_history[0] + (consts.MINIMAL_INTERVAL + 1))
+        Utils.log('first likelihood = {last_likelihood}'.format(last_likelihood=likelihood_history[-1]))
 
-        iteration_id = 0
-        while new_likelihood - last_likelihood > consts.MINIMAL_INTERVAL:
+        while likelihood_history[-1] - likelihood_history[-2] > consts.MINIMAL_INTERVAL:
+            # update lambda
+            if len(likelihood_history) % consts.LAMBDA_CHANGE_INTERVAL == 0:
+                lambda_parameter *= 0.1
+                if lambda_parameter < consts.MIN_LAMBDA:
+                    lambda_parameter = consts.MIN_LAMBDA
+
             # E step
             self.__execute_e_step()
 
             # M step
-            self.__execute_m_step()
+            self.__execute_m_step(lambda_parameter)
 
-            last_likelihood = new_likelihood
-            new_likelihood = self.__calculate_likelihood_log()
+            # calculate likelihood log
+            likelihood_history.append(self.__calculate_likelihood_log())
             Utils.log('iteration #{iteration_id}: new_likelihood= {new_likelihood}, diff={diff}, acc={acc}'.format(
-                    iteration_id=iteration_id, new_likelihood=new_likelihood, diff=new_likelihood-last_likelihood,
-                    acc=1-self.__get_loss()
+                    iteration_id=len(likelihood_history)-1, new_likelihood=likelihood_history[-1],
+                    diff=likelihood_history[-1]-likelihood_history[-2], acc=1-self.__get_loss()
                 )
             )
-            iteration_id += 1
+
+            # save graph
+            Utils.print_likelihood_graph(likelihood_history[1:])

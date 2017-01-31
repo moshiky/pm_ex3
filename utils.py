@@ -4,7 +4,10 @@
 
 import time
 from collections import Counter
+import matplotlib.pyplot as plt
+import os
 from document import Document
+import consts
 
 
 class Utils:
@@ -39,9 +42,10 @@ class Utils:
         word_counters = Counter(text.split())
         for word in word_counters.keys():
             if word_counters[word] < 4:
-                text = text.replace(' ' + word + ' ', ' ')
-                text = text.replace('\r\n' + word + ' ', '\r\n')
-                text = text.replace(' ' + word + '\r\n', '\r\n')
+                text = \
+                    text.replace(' ' + word + ' ', ' ').\
+                    replace('\r\n' + word + ' ', '\r\n').\
+                    replace(' ' + word + '\r\r\n', '\r\n')
 
         return text
 
@@ -77,3 +81,18 @@ class Utils:
 
         return documents, topics
 
+    @staticmethod
+    def print_likelihood_graph(likelihood_for_iteration):
+        plt.clf()
+        plt.plot(range(1, len(likelihood_for_iteration)+1), likelihood_for_iteration)
+        plt.plot(
+            [1, len(likelihood_for_iteration)+1],
+            [likelihood_for_iteration[-1], likelihood_for_iteration[-1]],
+            'r--'
+        )
+        plt.grid(True)
+        plt.savefig(
+            os.path.join(consts.GRAPH_FOLDER_PATH, consts.LIKELIHOOD_GRAPH_FILE_NAME).format(
+                iteration_id=len(likelihood_for_iteration)
+            )
+        )
