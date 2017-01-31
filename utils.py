@@ -3,6 +3,7 @@
 # Moshe Cohen - 203671508
 
 import time
+from collections import Counter
 from document import Document
 
 
@@ -33,13 +34,28 @@ class Utils:
         self.log(line)
 
     @staticmethod
+    def get_filtered_text(text):
+        Utils.log('get_filtered_text')
+        word_counters = Counter(text.split())
+        for word in word_counters.keys():
+            if word_counters[word] < 4:
+                text = text.replace(' ' + word + ' ', ' ')
+                text = text.replace('\r\n' + word + ' ', '\r\n')
+                text = text.replace(' ' + word + '\r\n', '\r\n')
+
+        return text
+
+    @staticmethod
     def load_dataset(dataset_file_path, topics_file_path):
+        Utils.log('load_dataset')
         with open(dataset_file_path, 'rb') as input_file:
             raw_text = input_file.read()
 
+        raw_text = Utils.get_filtered_text(raw_text)
         text_lines = raw_text.replace('\r\r\n', '\r\n').split('\r\n')
 
         # the dataset structure is ``a line with a title, and then the article itself.
+        Utils.log('build documents')
         documents = list()
         line_index = 0
         while line_index+1 < len(text_lines):

@@ -15,14 +15,17 @@ class Document:
 
     def __init_document_metadata(self, headline):
         headline_parts = headline.replace('>', '').split('\t')
-        self.__id = int(headline_parts[1])
         self.__topics = headline_parts[2:]
 
     def __filter_content(self):
         self.__word_counters = OrderedDict(sorted({
             key: value for key, value in self.__word_counters.items()
-            if key not in ['', ' '] and value > 3
+            if key not in ['', ' ']
         }.items()))
+
+    def remove_word(self, word):
+        if word in self.__word_counters.keys():
+            self.__word_counters.pop(word)
 
     def get_existing_word_counters(self):
         return self.__word_counters
@@ -33,9 +36,6 @@ class Document:
 
     def get_document_unique_words(self):
         return self.__word_counters.keys()
-
-    def get_document_id(self):
-        return self.__id
 
     def get_document_topics(self):
         return self.__topics
