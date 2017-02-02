@@ -1,19 +1,20 @@
+# Ori Rabi - 305284598
+# Moshe Cohen - 203671508
 
 import numpy as np
-from collections import OrderedDict
 import consts
 from utils import Utils
 
 
 class EMAlgorithm:
-    def __init__(self, documents, clusters):
+    def __init__(self, documents, topics):
         # self.__documents: list of Document objects
         # contains all of train documents
         self.__documents = documents
 
         # self.__clusters: list of strings
         # contains all of cluster names
-        self.__clusters = clusters
+        self.__topics = topics
 
         self.__clusters_probabilities = np.zeros(consts.NUM_OF_CLUSTERS)
         self.__word_for_given_cluster_probabilities = None
@@ -108,7 +109,7 @@ class EMAlgorithm:
     def __add_epsilon_to_zeros(x):
         return x if x > 0 else consts.EPSILON
 
-    def __execute_m_step(self, lambda_parameter):
+    def __execute_m_step(self):
         Utils.log("__execute_m_step")
 
         # calculate alpha i - average probability of each cluster
@@ -126,38 +127,35 @@ class EMAlgorithm:
         Utils.log("calculate numerator matrix")
         numerator_matrix = \
             self.__cluster_for_document_probabilities.transpose().dot(self.__all_document_counters) + \
-            lambda_parameter
+            consts.LAMBDA
 
         Utils.log("calculate denominator vector")
         denominator_vector = \
             self.__document_counter_sum.dot(self.__cluster_for_document_probabilities) + \
-            len(self.__all_seen_words) * lambda_parameter \
+            len(self.__all_seen_words) * consts.LAMBDA \
 
         Utils.log("calculate word for cluster probabilities matrix")
         self.__word_for_given_cluster_probabilities = (numerator_matrix.transpose() / denominator_vector).transpose()
 
-    def __get_cluster_dominant_topic(self, cluster_documents):
-        topic_freqs = dict()
-        for document in cluster_documents:
-            document_topics = document.get_document_topics()
-            for topic in document_topics:
-                if topic not in topic_freqs.keys():
-                    topic_freqs[topic] = 0
-                topic_freqs[topic] += 1
-
-        dominant_topic_name = topic_freqs.keys()[np.argmax(topic_freqs.values())]
-        return dominant_topic_name, topic_freqs[dominant_topic_name]
-
-    def __get_loss(self):
-        documents_to_clusters = [[] for i in range(consts.NUM_OF_CLUSTERS)]
+    def __get_clusters(self):
+        clusters = [[] for i in range(consts.NUM_OF_CLUSTERS)]
         for document_index, document in enumerate(self.__documents):
-            documents_to_clusters[self.__get_document_most_likely_cluster_id(document_index)].append(document)
+            clusters[self.__get_document_most_likely_cluster_id(document_index)].append(document)
 
+        return clusters
+
+    def __get_loss(self, clusters):
         mistakes = 0.0
-        for cluster_documents in documents_to_clusters:
-            cluster_dominant_topic, dominant_topic_freq = self.__get_cluster_dominant_topic(cluster_documents)
-            Utils.log('cluster topic: {topic}'.format(topic=cluster_dominant_topic))
-            mistakes += len(cluster_documents) - dominant_topic_freq
+        for cluster_id, cluster in enumerate(clusters):
+            cluster_counters = Utils.get_cluster_topic_counters(cluster, self.__topics)
+            cluster_topic_id = Utils.get_cluster_dominant_topic_id(cluster_counters)
+            cluster_dominant_topic = self.__topics[cluster_topic_id]
+            dominant_topic_freq = cluster_counters[cluster_topic_id]
+            Utils.log('cluster #{cluster_id} dominant topic: {topic}, freq={freq}'.format(
+                    topic=cluster_dominant_topic, cluster_id=cluster_id, freq=dominant_topic_freq
+                )
+            )
+            mistakes += len(cluster) - dominant_topic_freq
 
         return mistakes / len(self.__documents)
 
@@ -173,8 +171,7 @@ class EMAlgorithm:
             self.__cluster_for_document_probabilities[i::consts.NUM_OF_CLUSTERS, i] = 1
 
         # M step
-        lambda_parameter = consts.START_LAMBDA
-        self.__execute_m_step(lambda_parameter)
+        self.__execute_m_step()
 
         # iterate until progress is too small
         likelihood_history = list()
@@ -183,25 +180,28 @@ class EMAlgorithm:
         Utils.log('first likelihood = {last_likelihood}'.format(last_likelihood=likelihood_history[-1]))
 
         while likelihood_history[-1] - likelihood_history[-2] > consts.MINIMAL_INTERVAL:
-            # update lambda
-            if len(likelihood_history) % consts.LAMBDA_CHANGE_INTERVAL == 0:
-                lambda_parameter *= 0.1
-                if lambda_parameter < consts.MIN_LAMBDA:
-                    lambda_parameter = consts.MIN_LAMBDA
 
             # E step
             self.__execute_e_step()
 
             # M step
-            self.__execute_m_step(lambda_parameter)
+            self.__execute_m_step()
 
             # calculate likelihood log
             likelihood_history.append(self.__calculate_likelihood_log())
+
+            # build clusters
+            clusters = self.__get_clusters()
+
+            # print current performance
             Utils.log('iteration #{iteration_id}: new_likelihood= {new_likelihood}, diff={diff}, acc={acc}'.format(
                     iteration_id=len(likelihood_history)-1, new_likelihood=likelihood_history[-1],
-                    diff=likelihood_history[-1]-likelihood_history[-2], acc=1-self.__get_loss()
+                    diff=likelihood_history[-1]-likelihood_history[-2], acc=1-self.__get_loss(clusters)
                 )
             )
 
             # save graph
             Utils.print_likelihood_graph(likelihood_history[1:])
+
+            # print confusion matrix
+            Utils.log('\n' + str(Utils.get_confusion_matrix(self.__topics, clusters)))

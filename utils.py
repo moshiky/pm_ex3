@@ -1,8 +1,8 @@
-
 # Ori Rabi - 305284598
 # Moshe Cohen - 203671508
 
 import time
+import numpy as np
 from collections import Counter
 import matplotlib.pyplot as plt
 import os
@@ -96,3 +96,43 @@ class Utils:
                 iteration_id=len(likelihood_for_iteration)
             )
         )
+
+    @staticmethod
+    def get_cluster_topic_counters(cluster, topics):
+        topic_counters = dict(zip(topics, np.zeros(len(topics))))
+        for document in cluster:
+            document_topics = document.get_document_topics()
+            for topic in document_topics:
+                topic_counters[topic] += 1
+        return np.array(topic_counters.values())
+
+    @staticmethod
+    def get_confusion_matrix(topics, clusters):
+        """
+        :param topics: list of strings. the original topics list of the supplied topics file
+        :param clusters: dictionary of list of documents.
+        """
+        confusion_matrix = np.array(np.zeros((len(clusters), len(topics)+2)))
+        cluster_topics = list()
+        for cluster_index, cluster in enumerate(clusters):
+            cluster_counters = Utils.get_cluster_topic_counters(cluster, topics)
+            # build cluster row
+            cluster_row = np.append([cluster_index], cluster_counters)
+            cluster_row = np.append(cluster_row, [len(cluster)])
+            # store cluster row at the matrix
+            confusion_matrix[cluster_index] = cluster_row
+
+            # get cluster info
+            cluster_topic_id = Utils.get_cluster_dominant_topic_id(cluster_counters)
+            cluster_topic_name = topics[cluster_topic_id]
+            cluster_topic_freq = cluster_counters[cluster_topic_id]
+            cluster_topics.append((cluster_index, cluster_topic_name, cluster_topic_freq))
+
+        # sort matrix by cluster size
+        confusion_matrix = confusion_matrix[confusion_matrix[:, -1].argsort()][::-1]
+
+        return confusion_matrix, cluster_topics
+
+    @staticmethod
+    def get_cluster_dominant_topic_id(cluster_counters):
+        return np.argmax(cluster_counters)
