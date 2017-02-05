@@ -3,6 +3,7 @@
 
 import numpy as np
 from collections import Counter, OrderedDict
+# contains all the basic data and function for each document
 
 
 class Document:

@@ -9,17 +9,18 @@ from utils import Utils
 class EMAlgorithm:
     def __init__(self, documents, topics):
         # self.__documents: list of Document objects
-        # contains all of train documents
+        # contains all the training documents
         self.__documents = documents
 
         # self.__clusters: list of strings
-        # contains all of cluster names
+        # contains all of out cluster names
         self.__topics = topics
 
+        # init all values
         self.__clusters_probabilities = np.zeros(consts.NUM_OF_CLUSTERS)
         self.__word_for_given_cluster_probabilities = None
         self.__cluster_for_document_probabilities = None
-        # self.__filter_words()
+        
         self.__all_seen_words = self.__get_all_seen_words()
         self.__all_document_counters = \
             np.array([document.get_all_word_counters_vector(self.__all_seen_words) for document in self.__documents])
@@ -42,27 +43,6 @@ class EMAlgorithm:
             total_likelihood += max_zi + np.log(document_sum)
 
         return total_likelihood
-
-    def __filter_words(self):
-        Utils.log('__filter_words')
-        all_word_counters = dict()
-        for document in self.__documents:
-            document_word_counters = document.get_existing_word_counters()
-            for word in document_word_counters.keys():
-                if word not in all_word_counters.keys():
-                    all_word_counters[word] = 0
-                all_word_counters[word] += document_word_counters[word]
-
-        # mark words for deletion
-        words_to_delete = list()
-        for word in all_word_counters:
-            if all_word_counters[word] < 4:
-                words_to_delete.append(word)
-
-        # remove words from documents
-        for document in self.__documents:
-            for word in words_to_delete:
-                document.remove_word(word)
 
     def __get_all_seen_words(self):
         Utils.log("__get_all_seen_words")
@@ -87,10 +67,11 @@ class EMAlgorithm:
 
         # for each document
         for document_index in range(len(self.__documents)):
-            # for each cluster
+            # prepare document variables
             z_list = self.__get_zi_list(document_index)
             max_zi = max(z_list)
 
+            # for each cluster
             for i in range(consts.NUM_OF_CLUSTERS):
                 # calculate cluster probability given the document
                 if z_list[i] + consts.UNDERFLOW_VALUE < max_zi:
@@ -132,7 +113,7 @@ class EMAlgorithm:
         Utils.log("calculate denominator vector")
         denominator_vector = \
             self.__document_counter_sum.dot(self.__cluster_for_document_probabilities) + \
-            len(self.__all_seen_words) * consts.LAMBDA \
+            len(self.__all_seen_words) * consts.LAMBDA 
 
         Utils.log("calculate word for cluster probabilities matrix")
         self.__word_for_given_cluster_probabilities = (numerator_matrix.transpose() / denominator_vector).transpose()
@@ -165,7 +146,7 @@ class EMAlgorithm:
     def run(self):
         Utils.log("run")
 
-        # initiate clustering
+        # initiate clustering - put each document in a cluster randomly
         self.__cluster_for_document_probabilities = np.zeros(shape=(len(self.__documents), consts.NUM_OF_CLUSTERS))
         for i in range(consts.NUM_OF_CLUSTERS):
             self.__cluster_for_document_probabilities[i::consts.NUM_OF_CLUSTERS, i] = 1
@@ -173,12 +154,13 @@ class EMAlgorithm:
         # M step
         self.__execute_m_step()
 
-        # iterate until progress is too small
+        # keep track of likelihood for report
         likelihood_history = list()
         likelihood_history.append(self.__calculate_likelihood_log() - (consts.MINIMAL_INTERVAL + 1))
         likelihood_history.append(likelihood_history[0] + (consts.MINIMAL_INTERVAL + 1))
         Utils.log('first likelihood = {last_likelihood}'.format(last_likelihood=likelihood_history[-1]))
 
+        # iterate until progress is too small
         while likelihood_history[-1] - likelihood_history[-2] > consts.MINIMAL_INTERVAL:
 
             # E step

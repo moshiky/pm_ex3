@@ -8,8 +8,10 @@ from em_algorithm import EMAlgorithm
 
 
 def main(development_dataset_file_path, topics_file_path):
+    # loads the dataset
     documents, topics = Utils.load_dataset(development_dataset_file_path, topics_file_path)
 
+    # here is where the real calculations happen
     algorithm = EMAlgorithm(documents, topics)
     algorithm.run()
 
